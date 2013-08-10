@@ -1,6 +1,7 @@
 import inspect
 import re
 import sys
+import venusian
 
 from pyramid.exceptions import ConfigurationError
 
@@ -200,6 +201,24 @@ class action(object):
             wrapped.__exposed__.append(self.kw)
         else:
             wrapped.__exposed__ = [self.kw]
+        return wrapped
+
+class handler(object):
+    def __init__(self, **kwargs):
+        self._kwargs = kwargs
+
+    def __call__(self, wrapped):
+        if inspect.isclass(wrapped):
+            def callback(context, name, ob):
+                class_name = str.lower(wrapped.__name__)
+                route_name = self._kwargs.pop('route_name', class_name)
+                pattern = self._kwargs.pop('pattern', '/{handler}/{{action}}'.format(handler=class_name))
+                handler = self._kwargs.pop('handler', wrapped)
+                action = self._kwargs.pop('action', None)
+                config = context.config.with_package(info.module)
+                if config and getattr(config, 'add_handler'):
+                    config.add_handler(route_name, pattern, handler, action, **self._kwargs)
+            info = venusian.attach(wrapped, callback, category='pyramid')
         return wrapped
 
 def get_method_info(cls):
